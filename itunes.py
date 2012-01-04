@@ -12,7 +12,6 @@
 # wanted a file with an odd plb extention.
 #
 # Options:
-#   --library /Location/Of/Your/iTunes Library.xml
 #   --destination /Location/Of/Your/Android/media/Music
 #
 # TODO
@@ -34,23 +33,20 @@
 import os
 import sys
 import urllib2
+import urlparse
 import logging
 
-from shutil import copy
+from shutil import copy, Error
 from Foundation import *
+from ScriptingBridge import *
 from optparse import OptionParser
 
 logging.basicConfig(filename='syncItunes.log', level=logging.DEBUG)
 
 
-library_file = ''
 destination = ''
-music_dir = ''
 
-def tracks_match(local, remote):
-    " md5 takes too long, so we will just check to see if the file sizes are identical "
-
-    return os.path.getsize(local) == os.path.getsize(remote)
+kind_blacklist = ['Protected AAC audio file']
 
 def get_terminal_size():
     " Borrowed from the console python module "
@@ -76,48 +72,6 @@ def get_terminal_size():
         except:
             cr = (25, 80)
     return int(cr[1]), int(cr[0])
-
-def copy_track(track):
-    " Makes sure to only copy tracks that need copying "
-
-    did_copy = False
-
-    # Need to strip the leading / off for join to work
-    src = os.path.join(music_dir, track[1:])
-    dst = os.path.join(destination, os.path.dirname(track[1:]))
-    track_file_name = os.path.basename(src)
-    dst_file = os.path.join(dst, track_file_name)
-    if os.path.exists(src):
-        if not os.path.exists(dst_file) or not tracks_match(src, dst_file):
-            if not os.path.exists(dst):
-                os.makedirs(dst)
-            copy(src, dst)
-            did_copy = True
-
-    return did_copy
-
-
-def get_tracks(db):
-    " Get track info from approved track types "
-
-    tracks = {}
-    total_tracks = 0
-    accepted_kinds = ['AAC audio file', 'MPEG audio file', 'Purchased AAC audio file', 'WAV audio file']
-    file_protocol_len = 16 # file://localhost length
-    location_splice_len = len(music_dir)
-
-    for track in db['Tracks'].itervalues():
-        if track['Kind'] in accepted_kinds:
-            location = urllib2.url2pathname(track['Location'])[file_protocol_len:]
-            new_location = location[location_splice_len:]
-            tracks[track['Track ID']] = new_location
-            total_tracks = total_tracks + 1
-        else:
-            logging.info('Excluding file of kind: "{0}" -> "{1}"'.format(track['Kind'], track['Name']))
-
-    logging.info('Total tracks found: {0}'.format(total_tracks))
-    return tracks
-
 
 progress_bar_iter = 0
 def display_progress(percent):
@@ -151,65 +105,100 @@ def display_progress(percent):
 
     sys.stdout.flush()
 
-def create_playlists(db, tracks):
-    " Create all playlists in m3u and plb format. Copy music as we go... "
 
-    playlist_blacklist = ['Library', 'Movies', 'TV Shows', 'Books', 'iTunes DJ', 
-                          'Top 25 Most Played', 'Purchased', 'My Top Rated', 'Recently Added',
-                          'Recently Played']
-    # Get the terminal size so we can display a progress bar
-    total_tracks = len(tracks)
+def tracks_match(local, remote):
+    " md5 takes too long, so we will just check to see if the file sizes are identical "
+
+    return os.path.getsize(local) == os.path.getsize(remote)
+
+def get_track_location(track):
+    " Returns the absolute path to the iTunes track "
+
+    location = urllib2.unquote(str(track.location()))
+    return urlparse.urlparse(location)[2]
+
+def relative_track_path(track):
+    " Relative path for a track "
+
+    track_file_name = os.path.basename(get_track_location(track))
+    artist = track.artist() or 'Unknown Artist'
+    album = track.album() or 'Unknown Album'
+    return os.path.join(artist, album, track_file_name)
+
+def copy_track(track):
+    " Makes sure to only copy tracks that need copying "
+
+    src_track_file = get_track_location(track)
+    dst_track_file = os.path.join(destination, relative_track_path(track))
+    
+    if os.path.exists(src_track_file):
+        if not os.path.exists(dst_track_file) or not tracks_match(src_track_file, dst_track_file):
+            if not os.path.exists(os.path.dirname(dst_track_file)):
+                os.makedirs(os.path.dirname(dst_track_file))
+            copy(src_track_file, dst_track_file)
+    
+
+def copy_tracks(track_list):
+    accepted_tracks = [i for i in track_list if i.kind() not in kind_blacklist]
+    total_tracks = len(accepted_tracks)
     current_tracks_synced = 0
-    print "Syncing {0} total tracks.\r".format(total_tracks),
-    logging.info("Syncing {0} total tracks.".format(total_tracks))
-    for playlist in db['Playlists'].itervalues():
-        if playlist['Name'] in playlist_blacklist:
-            logging.info('Excluding playlist "{0}"'.format(playlist['Name']))
-            continue
-        if 'Playlist Items' in playlist:
-            playlist_file_name = "{0}.m3u".format(os.path.join(destination, playlist['Name'].encode('utf-8')))
+
+    logging.info("Syncing a total of {0} tracks. {1} were not able to be synced.".
+            format(total_tracks, (len(track_list) - total_tracks)))
+
+    for track in accepted_tracks:
+        logging.debug('Syncing {0}'.format(track.name().encode('utf-8')))
+        copy_track(track)
+        percent = (float(current_tracks_synced) / float(total_tracks)) * 100
+        current_tracks_synced = current_tracks_synced + 1
+        display_progress(percent)
+
+
+def create_playlists(playlists):
+    " Create all playlists in m3u and plb format. Copy music as we go... "
+    real_playlist_kind = 1800302446
+
+
+    # The first playlist should be the Music playlist.
+    print "\nCreating playlists..."
+    sys.stdout.flush()
+    for playlist in playlists:
+        if playlist.specialKind() == real_playlist_kind:
+            playlist_file_name = "{0}.m3u".format(os.path.join(destination, playlist.name().encode('utf-8')))
             playlist_file = open(playlist_file_name, 'w')
-            for item in playlist['Playlist Items'].itervalues():
-                track_id = item['Track ID']
-                if track_id in tracks:
-                    track = tracks[track_id]
-                    logging.debug('Syncing file {0}'.format(track.encode('utf-8')))
-                    if copy_track(track):
-                        current_tracks_synced = current_tracks_synced + 1
-                        logging.debug("Synced track {0} - {1}".format(current_tracks_synced, track.encode('utf-8')))
-
-                    # If all tracks have been synced, inform that we're creating the playlists now
-                    if current_tracks == total_tracks:
-                        current_tracks = current_tracks + 1
-                        print "\nCreating playlists..."
-                    else:
-                        percent = (float(current_tracks_synced) / float(total_tracks)) * 100
-                        display_progress(percent)
-                    playlist_file.write("{0}\n".format(track.encode('utf-8')))
-
+            for track in playlist.fileTracks():
+                if track.kind() not in kind_blacklist:
+                    track_path = relative_track_path(track)
+                    playlist_file.write(track_path.encode('utf-8'))
+                    playlist_file.write("\n")
             playlist_file.close()
 
             # Copy the file to a plb file (since they're the same format by removing the m3u extension
-            copy(playlist_file_name, "{0}.plb".format(playlist_file_name[:-4]))
+            try:
+                copy(playlist_file_name, "{0}.plb".format(playlist_file_name[:-4]))
+            except Error:
+                # This means the files are the same; we don't care.
+                pass
 
 
 if __name__ == '__main__':
     parser = OptionParser()
-    parser.add_option('-l', '--library', 
-                      dest='library', 
-                      help='The full path to your iTunes Library.xml file.',
-                      default='/Volumes/Media/iTunes/iTunes Library.xml')
     parser.add_option('-d', '--destination', dest='destination', 
                       help='The full path for the location to copy the music to.',
                       default='/Volumes/NO NAME 1/media/Music')
 
     (options, args) = parser.parse_args()
-    library_file = options.library
     destination = options.destination
-    music_dir = os.path.join(os.path.dirname(library_file), 'iTunes Media', 'Music')
-    db = NSDictionary.dictionaryWithContentsOfFile_(library_file)
 
-    print "Getting all track info...\r",
-    tracks = get_tracks(db)
-    create_playlists(db, tracks)
+    if not os.path.exists(destination):
+        print "-- ERROR -- The destination path does not exist. Do you have your phone plugged in?: %s" % destination.encode('utf-8')
+        exit(1)
+
+    print "Connecting to iTunes...\r",
+    sys.stdout.flush()
+
+    itunes = SBApplication.applicationWithBundleIdentifier_("com.apple.iTunes")
+
+    copy_tracks(itunes.sources()[0].userPlaylists()[0].fileTracks())
+    create_playlists(itunes.sources()[0].userPlaylists())
 
