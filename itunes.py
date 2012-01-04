@@ -3,13 +3,8 @@
 # Author - Dean Jones - http://deanproxy.com
 #
 # A quick and hacky way of syncing your iTunes library and playlist with your
-# android phone.  You provide the path to your iTunes Library.xml and the destination
-# to the place that you want your music copied to and it will hook you up.
-# 
-# It will create both m3u and plb playlist files.  plb files work best with the 
-# samsung default music app while m3u files work with almost any player.  They're
-# essentially the exact same format so I have no clue why samsung decided it only 
-# wanted a file with an odd plb extention.
+# android phone.  Done to get a grip on Foundation and Scripting Bridge support
+# on the Mac.
 #
 # Options:
 #   --destination /Location/Of/Your/Android/media/Music
@@ -172,13 +167,6 @@ def create_playlists(playlists):
                     playlist_file.write(track_path.encode('utf-8'))
                     playlist_file.write("\n")
             playlist_file.close()
-
-            # Copy the file to a plb file (since they're the same format by removing the m3u extension
-            try:
-                copy(playlist_file_name, "{0}.plb".format(playlist_file_name[:-4]))
-            except Error:
-                # This means the files are the same; we don't care.
-                pass
 
 
 if __name__ == '__main__':
