@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-#
 # Author - Dean Jones - http://deanproxy.com
 #
 # ITunes class to sync from itunes to destination.
