@@ -105,8 +105,6 @@ class MainFrame(wx.Frame):
         self.SetMenuBar(menuBar)  # Adding the MenuBar to the Frame content.
         self.Bind(wx.EVT_MENU, self.on_close, menuExit)
 
-        gridbag = wx.GridBagSizer(1, 4)
-
         self.choice = MainFrame.options[0]
         choice = wx.Choice(self, -1, size=(500, -1), choices=MainFrame.options, pos=(20, 20))
         self.Bind(wx.EVT_CHOICE, self.set_choice, choice)
