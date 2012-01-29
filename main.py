@@ -95,8 +95,6 @@ class MainFrame(wx.Frame):
     options = ['Sync all songs and playlists', 'Sync only songs', 'Choose playlist to sync']
 
     def __init__(self, parent, title):
-        global destination
-
         wx.Frame.__init__(self, parent, title=title, size=(540, 210))
         wx.Panel(self, -1, style=wx.TAB_TRAVERSAL|wx.CLIP_CHILDREN|wx.FULL_REPAINT_ON_RESIZE)
 
