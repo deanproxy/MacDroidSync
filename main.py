@@ -95,45 +95,66 @@ class MainFrame(wx.Frame):
     options = ['Sync all songs and playlists', 'Sync only songs', 'Choose playlist to sync']
 
     def __init__(self, parent, title):
-        super(MainFrame, self).__init__(parent, title=title, size=(500, 300))
+        super(MainFrame, self).__init__(parent, title=title, size=(500, 400))
 
+        # Set up the menu functionality
         menubar = wx.MenuBar()
         filemenu = wx.Menu()
         menubar.Append(filemenu,"&File") 
         self.SetMenuBar(menubar)
 
+        # The box sizer that all widgets will fit in
         vbox = wx.BoxSizer(wx.VERTICAL)
-        gs = wx.GridSizer(4, 1, 5, 5)
-        vbox.Add(gs, proportion=0, flag=wx.EXPAND|wx.ALL, border=20)
 
-        self.choice = MainFrame.options[0]
+        # Set up the playlist selection
         self.selected_playlists = []
         itunes = iTunes()
-        playlists = [p.name for p in itunes.playlists() if p.is_music_playlist]
-        self.plbox = wx.CheckListBox(self, 3, size=(100, 600), choices=playlists)
+        self.playlists = [p.name for p in itunes.playlists() if p.is_music_playlist]
+        self.plbox = wx.CheckListBox(self, 3, choices=self.playlists)
+        self.Bind(wx.EVT_CHECKLISTBOX, self.set_playlists, id=3)
 
-        gs2 = wx.GridSizer(2, 1, 5, 5)
-        gs2.AddMany([
-            (wx.Choice(self, choices=MainFrame.options, id=1), 0, wx.EXPAND),
-            (filebrowse.DirBrowseButton(self, labelText='', startDirectory='/Volumes', 
-                changeCallback=self.set_destination, id=2), 0, wx.EXPAND)
-        ])
-        gs.AddMany([
-            (gs2, 0, wx.EXPAND),
-            (self.plbox, 0, wx.EXPAND|wx.TOP, 20),
-            (wx.Button(self, 4, 'Sync'), 0, wx.ALIGN_BOTTOM|wx.ALIGN_RIGHT)
-        ])
+        # The directory browser
+        dirbrowse = filebrowse.DirBrowseButton(self, labelText='', startDirectory='/Volumes', 
+                toolTip='Choose where to sync', changeCallback=self.set_destination, id=2) 
+        dirbrowse.SetValue('Choose where to sync')
+        dirbrowse.Disable()
 
-        self.Bind(wx.EVT_CHECKLISTBOX, self.set_playlists, id=1)
-        self.Bind(wx.EVT_BUTTON, self.on_sync, id=4)
+        # The choice of what to do
+        self.choice = wx.Choice(self, choices=MainFrame.options, id=1)
         self.Bind(wx.EVT_CHOICE, self.set_choice, id=1)
 
-        self.SetSizer(vbox)
+        # Our sync button
+        self.sync_button = wx.Button(self, 4, 'Sync')
+        self.Bind(wx.EVT_BUTTON, self.on_sync, id=4)
+
+        vbox.AddMany([
+            (self.choice, 0, wx.EXPAND|wx.ALL, 5),
+            (dirbrowse, 0, wx.EXPAND|wx.ALL, 5),
+            # Set the proportion to 1 because we want the listbox to resize VERTICAL and HORIZONTAL
+            (self.plbox, 1, wx.EXPAND|wx.ALL, 5),
+            (self.sync_button, 0, wx.ALIGN_BOTTOM|wx.ALIGN_RIGHT|wx.ALL, 5)
+        ])
+
+        # We're placing a boxsizer inside of a boxsizer so that we can get
+        # a nice 20 pixel border (padding) around all elements.
+        mainbox = wx.BoxSizer(wx.VERTICAL)
+        mainbox.Add(vbox, 1, wx.EXPAND|wx.ALL, 20)
+
+        # We have a default where all items are checked
+        indexes = [idx for (idx,p) in enumerate(self.playlists)]
+        self.plbox.SetChecked(indexes)
+
+        self.SetSizer(mainbox)
         self.Show()
 
     def set_playlists(self, evt):
         index = evt.GetSelection()
-        status = 'un'
+        print "Current selection is: {0}".format(self.choice.GetCurrentSelection())
+        if self.choice.GetCurrentSelection() != 2:
+            # They have selected or deselected an element and have not choosen 
+            # to specify the playlists they want. Change their choice for them.
+            self.choice.SetSelection(2)
+
         if self.plbox.IsChecked(index):
             self.selected_playlists.append(index)
         elif index in self.selected_playlists:
@@ -146,7 +167,14 @@ class MainFrame(wx.Frame):
         destination = evt.GetString()
 
     def set_choice(self, evt):
-        self.choice = evt.GetString()
+        # TODO - We need to check all boxes if they select they want all playlists
+        # We should also disable the boxes when they do choose that.
+        if self.choice.GetCurrentSelection() == 0:
+            indexes = [idx for (idx,p) in enumerate(self.playlists)]
+            self.plbox.SetChecked(indexes)
+        elif self.choice.GetCurrentSelection() == 1:
+            # Clear all checked
+            self.plbox.SetChecked([])
 
     def on_sync(self, event):
         global destination
@@ -155,8 +183,9 @@ class MainFrame(wx.Frame):
         progress = None
 
         print "Destination is: {0}".format(destination)
-        if not destination:
-            msg = wx.MessageDialog(self, 'You must enter a destination directory first.', "Error", wx.OK|wx.ICON_INFORMATION)
+        if not destination or destination == 'Choose where to sync':
+            msg = wx.MessageDialog(self, 'You must enter a destination directory first.', 
+                    "Error", wx.OK|wx.ICON_INFORMATION)
             msg.ShowModal()
             msg.Destroy()
             return
