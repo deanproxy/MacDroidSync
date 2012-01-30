@@ -7,8 +7,7 @@ import sys
 import urllib2
 import urlparse
 
-from Foundation import *
-from ScriptingBridge import *
+from ScriptingBridge import SBApplication
 
 
 class iTunesTrack(object):

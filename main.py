@@ -95,38 +95,52 @@ class MainFrame(wx.Frame):
     options = ['Sync all songs and playlists', 'Sync only songs', 'Choose playlist to sync']
 
     def __init__(self, parent, title):
-        wx.Frame.__init__(self, parent, title=title, size=(540, 210))
-        wx.Panel(self, -1, style=wx.TAB_TRAVERSAL|wx.CLIP_CHILDREN|wx.FULL_REPAINT_ON_RESIZE)
+        super(MainFrame, self).__init__(parent, title=title, size=(500, 300))
 
+        menubar = wx.MenuBar()
         filemenu = wx.Menu()
-        menuExit = filemenu.Append(wx.ID_EXIT,"E&xit"," Terminate the program")
-        menuBar = wx.MenuBar()
-        menuBar.Append(filemenu,"&File") # Adding the "filemenu" to the MenuBar
-        self.SetMenuBar(menuBar)  # Adding the MenuBar to the Frame content.
-        self.Bind(wx.EVT_MENU, self.on_close, menuExit)
+        menubar.Append(filemenu,"&File") 
+        self.SetMenuBar(menubar)
+
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        gs = wx.GridSizer(4, 1, 5, 5)
+        vbox.Add(gs, proportion=0, flag=wx.EXPAND|wx.ALL, border=20)
 
         self.choice = MainFrame.options[0]
-        choice = wx.Choice(self, -1, size=(500, -1), choices=MainFrame.options, pos=(20, 20))
-        self.Bind(wx.EVT_CHOICE, self.set_choice, choice)
-        filebrowse.DirBrowseButton(self, -1, size=(500, -1), pos=(20, 50), changeCallback=self.set_destination)
+        self.selected_playlists = []
+        itunes = iTunes()
+        playlists = [p.name for p in itunes.playlists() if p.is_music_playlist]
+        self.plbox = wx.CheckListBox(self, 3, size=(100, 600), choices=playlists)
 
-        cancel = wx.Button(self, 1, 'Cancel', pos=(330, 150))
-        cancel.SetConstraints(
-            anchors.LayoutAnchors(cancel, False, False, True, True)
-        )
-        sync = wx.Button(self, 2, 'Sync', pos=(430, 150))
-        sync.SetConstraints(
-            anchors.LayoutAnchors(sync, False, False, True, True)
-        )
-        self.Bind(wx.EVT_BUTTON, self.on_close, id=1)
-        self.Bind(wx.EVT_BUTTON, self.on_sync, id=2)
+        gs2 = wx.GridSizer(2, 1, 5, 5)
+        gs2.AddMany([
+            (wx.Choice(self, choices=MainFrame.options, id=1), 0, wx.EXPAND),
+            (filebrowse.DirBrowseButton(self, labelText='', startDirectory='/Volumes', 
+                changeCallback=self.set_destination, id=2), 0, wx.EXPAND)
+        ])
+        gs.AddMany([
+            (gs2, 0, wx.EXPAND),
+            (self.plbox, 0, wx.EXPAND|wx.TOP, 20),
+            (wx.Button(self, 4, 'Sync'), 0, wx.ALIGN_BOTTOM|wx.ALIGN_RIGHT)
+        ])
 
-        self.SetSizeHints(minW=540, minH=210, maxW=540, maxH=210)
-        self.Show(True)
+        self.Bind(wx.EVT_CHECKLISTBOX, self.set_playlists, id=1)
+        self.Bind(wx.EVT_BUTTON, self.on_sync, id=4)
+        self.Bind(wx.EVT_CHOICE, self.set_choice, id=1)
 
-    def on_close(self, event):
-        self.Close(True)
+        self.SetSizer(vbox)
+        self.Show()
 
+    def set_playlists(self, evt):
+        index = evt.GetSelection()
+        status = 'un'
+        if self.plbox.IsChecked(index):
+            self.selected_playlists.append(index)
+        elif index in self.selected_playlists:
+            self.selected_playlists.pop(index)
+
+        self.plbox.SetSelection(index) 
+        
     def set_destination(self, evt):
         global destination
         destination = evt.GetString()
@@ -164,7 +178,8 @@ class MainFrame(wx.Frame):
             progress.Destroy()
 
 
-app = wx.App(False)
-frame = MainFrame(None, 'Mac-Droid-Sync')
-app.MainLoop()
+if __name__ == '__main__':
+    app = wx.App()
+    MainFrame(None, 'Mac-Droid-Sync')
+    app.MainLoop()
 
