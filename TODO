@@ -1,0 +1,4 @@
+- Check that there is enough space to copy over all files selected.
+- Implement sync only tracks and sync only specified playlists
+- Implement save file (save last settings to ~/.deanisawesome)
+- Find easier way to pick sync folder??

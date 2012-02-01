@@ -204,16 +204,25 @@ class MainFrame(wx.Frame):
             total_tracks = len(itunes.playlists()[0].tracks)
             progress = wx.ProgressDialog('Syncing iTunes Tracks', 'Copying track...', 
                     maximum=total_tracks, style=0|wx.PD_CAN_ABORT|wx.PD_ESTIMATED_TIME|wx.PD_REMAINING_TIME)
-            for playlist in itunes.playlists():
+            # First we want to write all tracks under the Music playlist, but not write that as an m3u file
+            tracks = [t for t in itunes.playlists()[0].tracks if not t.is_protected()]
+            (synced, skipped) = sync_tracks(tracks, progress)
+            if skipped == -1:
+                # They canceled the sync progress
+                return
+
+            # Next, finish up by writing the playlists m3u files out
+            playlists = [p for p in itunes.playlists() if p.is_music_playlist()]
+            for playlist in playlists:
                 (synced, skipped) = sync_playlist(playlist, progress)
                 if skipped == -1:
-                    break
+                    # Canceled the sync
+                    return
 
-            if skipped != -1:
-                msg = wx.MessageDialog(self, 'Synced {0} tracks. {1} tracks could not be synced due to DRM'.
-                            format(synced, skipped), "Finished!", wx.OK | wx.ICON_INFORMATION)
-                msg.ShowModal()
-                msg.Destroy()
+            msg = wx.MessageDialog(self, 'Synced {0} tracks. {1} tracks could not be synced due to DRM'.
+                        format(synced, skipped), "Finished!", wx.OK | wx.ICON_INFORMATION)
+            msg.ShowModal()
+            msg.Destroy()
 
         if progress:
             progress.Destroy()
