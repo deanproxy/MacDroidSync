@@ -92,7 +92,7 @@ def copy_track(track):
         
 
 class MainFrame(wx.Frame):
-    options = ['Sync all songs and playlists', 'Sync only songs', 'Choose playlist to sync']
+    options = ['Sync all songs and playlists', 'Sync only songs', 'Sync only specified playlists']
 
     def __init__(self, parent, title):
         super(MainFrame, self).__init__(parent, title=title, size=(500, 400))
@@ -114,7 +114,7 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_CHECKLISTBOX, self.set_playlists, id=3)
 
         # The directory browser
-        dirbrowse = filebrowse.DirBrowseButton(self, labelText='', startDirectory='/Volumes', 
+        dirbrowse = filebrowse.DirBrowseButton(self, labelText='Destination', startDirectory='/Volumes', 
                 toolTip='Choose where to sync', changeCallback=self.set_destination, id=2) 
         dirbrowse.SetValue('Choose where to sync')
         dirbrowse.Disable()
@@ -128,8 +128,9 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.on_sync, id=4)
 
         vbox.AddMany([
-            (self.choice, 0, wx.EXPAND|wx.ALL, 5),
             (dirbrowse, 0, wx.EXPAND|wx.ALL, 5),
+            (self.choice, 0, wx.EXPAND|wx.ALL, 5),
+            #(dirbrowse, 0, wx.EXPAND|wx.ALL, 5),
             # Set the proportion to 1 because we want the listbox to resize VERTICAL and HORIZONTAL
             (self.plbox, 1, wx.EXPAND|wx.ALL, 5),
             (self.sync_button, 0, wx.ALIGN_BOTTOM|wx.ALIGN_RIGHT|wx.ALL, 5)
