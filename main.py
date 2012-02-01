@@ -46,14 +46,18 @@ def sync_playlist(playlist, progress=None):
     if not os.path.exists(playlist_dir):
         os.makedirs(playlist_dir)
 
-    playlist_file_name = "{0}.m3u".format(os.path.join(playlist_dir, playlist.name.encode('utf-8')))
+    print repr(playlist.name)
+    print "Total tracks to be synced: {0}".format(total_tracks)
+    pl_name = playlist.name.decode('utf-8').encode('latin-1')
+    playlist_file_name = "{0}.m3u".format(os.path.join(playlist_dir, pl_name))
     playlist_file = open(playlist_file_name, 'w')
 
     for track in playlist.tracks:
-        if not track.is_protected:
+        print "Syncing track: {0}".format(track.name.encode('utf-8'))
+        if not track.is_protected():
             (keep_going,skip) = progress.Update(count, 'Copying Track: %s' % track.name.encode('utf-8'))
             if not keep_going:
-                return
+                return (count, -1)
             copy_track(track)
             track_path = relative_track_path(track)
             playlist_file.write(os.path.join('..', track_path.encode('utf-8')))
@@ -69,8 +73,8 @@ def relative_track_path(track):
     """ Relative path for a track """
 
     track_file_name = os.path.basename(track.path)
-    artist = track.albumArtist() or 'Unknown Artist'
-    album = track.album() or 'Unknown Album'
+    artist = track.albumArtist or 'Unknown Artist'
+    album = track.album or 'Unknown Album'
     return os.path.join(artist, album, track_file_name)
 
 def tracks_match(local, remote):
@@ -109,7 +113,7 @@ class MainFrame(wx.Frame):
         # Set up the playlist selection
         self.selected_playlists = []
         itunes = iTunes()
-        self.playlists = [p.name for p in itunes.playlists() if p.is_music_playlist]
+        self.playlists = [p.name for p in itunes.playlists() if p.is_music_playlist()]
         self.plbox = wx.CheckListBox(self, 3, choices=self.playlists)
         self.Bind(wx.EVT_CHECKLISTBOX, self.set_playlists, id=3)
 
@@ -190,19 +194,26 @@ class MainFrame(wx.Frame):
             msg.ShowModal()
             msg.Destroy()
             return
+        else:
+            destination = os.path.join(destination, 'itunes', 'Music')
 
 
-        print "Choice is: {0}".format(self.choice)
-        if self.choice == 'Sync all songs and playlists...':
+        print "Syncing to: {0}".format(destination)
+        if self.choice.GetCurrentSelection() == 0:
             # First playlist should be the special 'Music' playlist, which has all tracks
             total_tracks = len(itunes.playlists()[0].tracks)
             progress = wx.ProgressDialog('Syncing iTunes Tracks', 'Copying track...', 
-                    maximum=total_tracks, style=0|wx.PD_CAN_ABORT)
-            (synced, skipped) = sync_playlists(itunes.playlists())
-            msg = wx.MessageDialog(self, 'Synced {0} tracks. {1} tracks could not be synced due to DRM'.
-                        format(synced, skipped), "Finished!", wx.OK | wx.ICON_INFORMATION)
-            msg.ShowModal()
-            msg.Destroy()
+                    maximum=total_tracks, style=0|wx.PD_CAN_ABORT|wx.PD_ESTIMATED_TIME|wx.PD_REMAINING_TIME)
+            for playlist in itunes.playlists():
+                (synced, skipped) = sync_playlist(playlist, progress)
+                if skipped == -1:
+                    break
+
+            if skipped != -1:
+                msg = wx.MessageDialog(self, 'Synced {0} tracks. {1} tracks could not be synced due to DRM'.
+                            format(synced, skipped), "Finished!", wx.OK | wx.ICON_INFORMATION)
+                msg.ShowModal()
+                msg.Destroy()
 
         if progress:
             progress.Destroy()

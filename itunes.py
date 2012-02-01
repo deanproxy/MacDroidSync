@@ -7,6 +7,7 @@ import sys
 import urllib2
 import urlparse
 
+# from Foundation import *
 from ScriptingBridge import SBApplication
 
 
@@ -16,7 +17,11 @@ class iTunesTrack(object):
         """ represents the essential information for a track """
 
         self.name = track.name()
+        self.albumArtist = track.albumArtist()
+        self.album = track.album()
+        self.artist = track.artist()
         self.kind = track.kind()
+        self.size = track.size()
         self.path = self._get_track_location(track)
 
     def is_protected(self):
